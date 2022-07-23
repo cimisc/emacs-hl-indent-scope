@@ -52,11 +52,9 @@
 
 ;; (defun hl-scope-test-run-all-impl ()
 ;;   "Run each test and exit."
-
 ;;   (hl-scope-test--with-temp-dir
 ;;     ;; Don't touch the users home directory.
 ;;     hl-scope-directory
-
 ;;     (dotimes (f 100)
 ;;       (let*
 ;;         ( ;; While the session file wouldn't typically
@@ -102,21 +100,86 @@
 ;;                 (message "Test succeeded #%s" f))
 ;;               (t
 ;;                 (error "Test failed #%s" f))))))))
-
 ;;   (message "Done"))
+;; (require 'face-explorer)
 
 (defun hl-scope-preview ()
   "Run every test."
+  ;; (load-theme 'tango-dark)
+  ;; (load-theme ')
+  ;; (require 'color-theme)
+  ;; (color-theme-initialize)
+
+  (defun display-graphic-p (&rest _) t)
+  (defun window-system (&rest _) 'pgtk)
+
+  ;; (defun modify-frame-parameters (&rest _) nil)
+
+  ;; (defun x-get-resource (a b)
+  ;;   (message "A: %S" a)
+  ;;   (cond
+  ;;     ((string-equal a "background")
+  ;;       "black")))
+
+
+  (load-theme 'wombat)
+
   (let ((buf (generate-new-buffer "untitled.c")))
     (with-current-buffer buf
-      (set-buffer-major-mode buf)
-      (display-buffer buf)
+      (c-mode)
+      (message "Hello %S\n" (list-colors-display))
+      (insert
+        "/* This is a comment {}. */\n"
+        "#include \"test{}.h\"\n"
+        "\n"
+        "int main(void)\n"
+        "{\n"
+        "  if (foo) {\n"
+        "    this_is_foo();\n"
+        "    that_is_foo();\n"
+        "  }\n"
+        "  else {\n"
+        "    testme();\n"
+        "    if (bar) {\n"
+        "      baz();\n"
+        "      tas();\n"
+        "    }\n"
+        "  }\n"
+        "  return 1;"
+        "\n}\n"
+        "\n"
+        "static void test_me(int a)\n"
+        "{\n"
+        "  foo_bar();\n"
+        "\n"
+        "  if (foo) {\n"
+        "    this_is_foo();\n"
+        "    that_is_foo();\n"
+        "  }\n"
+        "  else {\n"
+        "    testme();\n"
+        "    if (bar) {\n"
+        "      baz();\n"
+        "      tas();\n"
+        "    }\n"
+        "  }\n"
+        "}\n"
+        "\n"
+        "\n"
+        "/* Test foo. */\n")
+
       (font-lock-mode 1)
-      (font-lock-flush)
+      (font-lock-flush (point-min) (point-max))
+      (font-lock-ensure (point-min) (point-max))
+      (font-lock-fontify-region (point-min) (point-max))
+
+      (hl-scope-mode)
+
       (let ((buf-html (htmlfontify-buffer)))
         (with-current-buffer buf-html
-          (write-region
-            (point-min) (point-max) (file-name-concat hl-scope-basedir "file.html")))))))
+          (write-region (point-min) (point-max) (file-name-concat hl-scope-basedir "file.html"))))
+
+      (kill-emacs))))
 
 (provide 'hl-scope-test)
 ;;; hl-scope-test.el ends here

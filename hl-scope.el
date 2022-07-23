@@ -21,6 +21,8 @@
 
 ;;; Code:
 
+;;
+
 ;; ---------------------------------------------------------------------------
 ;; Custom Variables
 
@@ -237,9 +239,74 @@ Argument BLOCK-LIST represents start-end ranges of braces."
 ;; ---------------------------------------------------------------------------
 ;; Internal Mode Management
 
+(defun printf (&rest args) (princ (apply #'format args) #'external-debugging-output))
+
+
+(defun inside-string-p (state)
+  "Return non-nil if inside string, else nil.
+This depends on major mode having setup syntax table properly."
+  (interactive)
+  (let ((result))
+    result))
+
+(defun hl-block--find-range (pt)
+  "Return range around PT or nil."
+  (let ((beg (ignore-errors (elt (syntax-ppss pt) 1))))
+    (when beg
+      ;; Note that `end' may be nil for un-matched brackets.
+      ;; The caller must handle this case.
+      (let ((end (ignore-errors (scan-sexps beg 1))))
+        end))))
+
+
 (defun hl-scope-mode-enable ()
   "Turn on `hl-scope-mode' for the current buffer."
-  (put-text-property 1 5 'font-lock-face 'error))
+
+  ;; (put-text-property 1 8 'font-lock-face 'warning)
+
+  (put-text-property 1 6 'font-lock-face 'warning)
+
+  (goto-char (point-min))
+  (let
+    (
+      (aa-face (list :background "#00AA00"))
+      (xx-face (list :background "#AA0000"))
+      (yy-face (list :background "#0000AA")))
+
+    (save-match-data
+      (while (search-forward "{" (point-max) t)
+        (let
+          (
+            (state (syntax-ppss))
+            (pos-next nil)
+            (var nil))
+          (cond
+            ((or (nth 3 state) (nth 4 state))
+              nil)
+            (t
+              ;; (insert "|")
+
+              (setq pos-next (hl-block--find-range (point)))
+              ;; (unless pos-next
+              ;;   (setq pos-next (+ 2 (point))))
+
+              (printf "%S -\n" pos-next)
+
+              ;; (setq pos-next
+              ;;   (save-excursion
+              ;;     (forward-char -1)
+              ;;     (ignore-errors (forward-sexp) (1- (point)))))
+
+              (put-text-property (point) pos-next 'font-lock-face xx-face)
+              ;; (goto-char (point-max))
+
+              (setq var xx-face)
+              (setq xx-face aa-face)
+              (setq aa-face yy-face)
+              (setq yy-face var)
+
+              ;; (forward-char 1)
+              )))))))
 
 
 (defun hl-scope-mode-disable ()
@@ -261,8 +328,6 @@ Argument BLOCK-LIST represents start-end ranges of braces."
 (define-minor-mode hl-scope-mode
   "Highlight block under the cursor."
   :global nil
-  :lighter hl-scope-mode-lighter
-
   (cond
     (hl-scope-mode
       (hl-scope-mode-enable))
@@ -275,7 +340,7 @@ Argument BLOCK-LIST represents start-end ranges of braces."
 
   hl-scope-mode hl-scope-mode-turn-on)
 
-(provide 'hl-scope-mode)
+(provide 'hl-scope)
 ;; Local Variables:
 ;; indent-tabs-mode: nil
 ;; End:
