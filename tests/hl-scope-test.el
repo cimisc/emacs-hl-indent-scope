@@ -127,7 +127,9 @@
   (let ((buf (generate-new-buffer "untitled.c")))
     (with-current-buffer buf
       (c-mode)
+      (setq-local tab-width 2)
       (message "Hello %S\n" (list-colors-display))
+
       (insert
         "/* This is a comment {}. */\n"
         "#include \"test{}.h\"\n"
@@ -161,12 +163,25 @@
         "    if (bar) {\n"
         "      baz();\n"
         "      tas();\n"
+        "\n"
+        "      struct Foo {\n"
+        "          .value = 10,\n"
+        "          otherwise = 15,\n"
+        "      };\n"
+        "      struct Bar {\n"
+        "#ifdef __linux__\n"
+        "          .value = 10,\n"
+        "#endif\n"
+        "          otherwise = 15,\n"
+        "      };\n"
+
         "    }\n"
         "  }\n"
         "}\n"
         "\n"
         "\n"
         "/* Test foo. */\n")
+
 
       (font-lock-mode 1)
       (font-lock-flush (point-min) (point-max))
