@@ -242,29 +242,54 @@ Argument BLOCK-LIST represents start-end ranges of braces."
 (defun printf (&rest args) (princ (apply #'format args) #'external-debugging-output))
 
 
-(defun inside-string-p (state)
-  "Return non-nil if inside string, else nil.
-This depends on major mode having setup syntax table properly."
-  (interactive)
-  (let ((result))
-    result))
-
 (defun hl-block--find-range (pt)
   "Return range around PT or nil."
   (let ((beg (ignore-errors (elt (syntax-ppss pt) 1))))
     (when beg
       ;; Note that `end' may be nil for un-matched brackets.
       ;; The caller must handle this case.
-      (let ((end (ignore-errors (scan-sexps beg 1))))
+      (let ()
         end))))
+
+
+;; ---------------------------------------------------------------------------
+;; Internal Bracket Functions
+
+(defun hl-scope---tree-from-buffer-impl (beg end)
+  "Return a tree from the buffer.
+
+The format is ((start . end) children-or-nil)
+Test."
+  (let ((range-tree nil))
+    (while (search-forward "{" end t)
+      (let ((state (syntax-ppss)))
+        (unless (or (nth 3 state) (nth 4 state))
+          (let ((pos-beg (point)))
+            (let ((pos-end (ignore-errors (scan-sexps (1- (point)) 1))))
+              (unless pos-end
+                (setq pos-end end))
+              (push
+                (cons (cons (point) pos-end) (hl-scope---tree-from-buffer-impl pos-beg pos-end))
+                range-tree)
+              (goto-char pos-end))))))
+    range-tree))
+
+(defun hl-scope---tree-from-buffer ()
+  (save-excursion
+    (goto-char (point-min))
+    (save-match-data (hl-scope---tree-from-buffer-impl (point-min) (point-max)))))
 
 
 (defun hl-scope-mode-enable ()
   "Turn on `hl-scope-mode' for the current buffer."
 
   ;; (put-text-property 1 8 'font-lock-face 'warning)
-
+  (toggle-debug-on-error)
   (put-text-property 1 6 'font-lock-face 'warning)
+
+  (goto-char (point-min))
+
+  (printf "TREE: %S\n" (hl-scope---tree-from-buffer))
 
   (goto-char (point-min))
   (let
@@ -278,7 +303,7 @@ This depends on major mode having setup syntax table properly."
         (let
           (
             (state (syntax-ppss))
-            (pos-next nil)
+            (pos-end nil)
             (var nil))
           (cond
             ((or (nth 3 state) (nth 4 state))
@@ -286,18 +311,18 @@ This depends on major mode having setup syntax table properly."
             (t
               ;; (insert "|")
 
-              (setq pos-next (hl-block--find-range (point)))
-              ;; (unless pos-next
-              ;;   (setq pos-next (+ 2 (point))))
+              (setq pos-end (ignore-errors (scan-sexps (1- (point)) 1)))
+              (unless pos-end
+                (setq pos-end (point-max)))
 
-              (printf "%S -\n" pos-next)
+              (printf "%S -\n" pos-end)
 
-              ;; (setq pos-next
+              ;; (setq pos-end
               ;;   (save-excursion
               ;;     (forward-char -1)
               ;;     (ignore-errors (forward-sexp) (1- (point)))))
 
-              (put-text-property (point) pos-next 'font-lock-face xx-face)
+              (put-text-property (point) pos-end 'font-lock-face xx-face)
               ;; (goto-char (point-max))
 
               (setq var xx-face)
