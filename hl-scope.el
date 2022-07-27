@@ -203,8 +203,7 @@ Argument BLOCK-LIST represents start-end ranges of braces."
 
 (defun hl-scope--overlay-clear ()
   "Clear all overlays."
-  (mapc 'delete-overlay hl-scope--overlay)
-  (setq hl-scope--overlay nil))
+  (remove-overlays (point-min) (point-max) 'hl-scope t))
 
 
 (defun hl-scope--overlay-refresh ()
@@ -258,6 +257,12 @@ Argument BLOCK-LIST represents start-end ranges of braces."
 ;; Internal Bracket Functions
 ;;
 
+;; If we are not already inside an s-expression, leave all-beg as-is.
+(defun hl-scope--prev-sexp-expand (beg)
+  (let ((beg-next nil))
+    (while (setq beg-next (ignore-errors (nth 1 (syntax-ppss beg))))
+      (setq beg beg-next)))
+  beg)
 
 (defun hl-scope--next-sexp-by-search (end)
   "Skip forward by search, bound by END."
@@ -283,37 +288,41 @@ Argument BLOCK-LIST represents start-end ranges of braces."
   ;; Both of these functions work, we may want to select syntax for lisp,
   ;; and search for C/C++ as way may not want to treat literal braces
   ;; the same way as other kinds of parenthesis.
-
   (hl-scope--next-sexp-by-search end)
   ;; (hl-scope--next-sexp-by-syntax end)
   ;;
   )
 
-(defun hl-scope---tree-from-buffer-impl (beg end)
+(defun hl-scope--tree-from-buffer-impl (all-beg all-end beg end)
   "Return a tree from the buffer.
 
 The format is ((start . end) children-or-nil)
 Test."
-  (let ((range-tree nil))
-    ;; (while
-    ;; (while (forward-sexp 1)
-    (while (hl-scope--next-sexp-generic end)
+  (let
+    (
+      (range-tree nil)
+      (end-bound (min end all-end)))
+    (while (and (< (point) end-bound) (hl-scope--next-sexp-generic end-bound))
       (let ((state (syntax-ppss)))
         (unless (or (nth 3 state) (nth 4 state))
           (let ((pos-beg (point)))
             (let ((pos-end (ignore-errors (scan-sexps (1- (point)) 1))))
               (unless pos-end
                 (setq pos-end end))
-              (push
-                (cons (cons (point) pos-end) (hl-scope---tree-from-buffer-impl pos-beg pos-end))
-                range-tree)
+              (unless (or (<= all-end pos-beg) (<= pos-end all-beg))
+                (push
+                  (cons
+                    (cons (point) pos-end)
+                    (hl-scope--tree-from-buffer-impl all-beg all-end pos-beg pos-end))
+                  range-tree))
               (goto-char pos-end))))))
     range-tree))
 
-(defun hl-scope--tree-from-buffer ()
+(defun hl-scope--tree-from-buffer (all-beg all-end)
   (save-excursion
-    (goto-char (point-min))
-    (save-match-data (hl-scope---tree-from-buffer-impl (point-min) (point-max)))))
+    (goto-char all-beg)
+    (setq all-beg (hl-scope--prev-sexp-expand all-beg))
+    (save-match-data (hl-scope--tree-from-buffer-impl all-beg all-end all-beg all-end))))
 
 (cond
   ((display-graphic-p)
@@ -386,7 +395,7 @@ Argument STOP is the current indentation level, use for reference."
 
         (setq level (1- level))))))
 
-(defun hl-scope--font-lock-tree-impl (tree level stops)
+(defun hl-scope--font-lock-tree-impl (all-beg all-end tree level stops)
   "Implement full buffer font locking of indentation levels.
 
 Argument STOPS is a list of indentation widths, ordered largest to smallest,
@@ -401,43 +410,47 @@ always ending in zero: e.g. (list 8 4 0)."
           ;;    else /* <- indentation before this line for e.g. */
           ;;    {
           (when (zerop level)
-            (goto-char range-end)
+            (goto-char (min all-end range-end))
             (goto-char (line-beginning-position)))
           (cond
             (children
               (let ((child-end (cdr (car (car children)))))
                 (while (> (point) child-end)
-                  (hl-scope--propertize-stops level stops-next)
+                  (when (and (<= (point) all-end) (<= all-beg (point)))
+                    (hl-scope--propertize-stops level stops-next))
                   (forward-line -1)))
 
-              (hl-scope--font-lock-tree-impl children (1+ level) stops-next)
+              (hl-scope--font-lock-tree-impl all-beg all-end children (1+ level) stops-next)
 
-              (while (> (point) range-beg)
-                (hl-scope--propertize-stops level stops-next)
-                (forward-line -1)))
+              (let ((range-beg-bound (max range-beg all-beg)))
+                (while (> (point) range-beg-bound)
+                  (hl-scope--propertize-stops level stops-next)
+                  (forward-line -1))))
             (t
               (while (> (point) range-beg)
-                (hl-scope--propertize-stops level stops-next)
+                (when (and (<= (point) all-end) (<= all-beg (point)))
+                  (hl-scope--propertize-stops level stops-next))
                 (forward-line -1)))))))))
 
-(defun hl-scope--font-lock-tree ()
-  ""
-  (remove-overlays (point-min) (point-max) 'hl-scope t)
-
+(defun hl-scope--font-lock-tree (all-beg all-end)
+  "Lock tree."
   (save-excursion
-    (let ((tree (hl-scope--tree-from-buffer)))
-      (hl-scope--font-lock-tree-impl tree 0 (list 0)))))
+    (let ((tree (hl-scope--tree-from-buffer all-beg all-end)))
+      (hl-scope--font-lock-tree-impl all-beg all-end tree 0 (list 0)))))
+
+(defun hl-scope--font-lock-fontify-region (pos-beg pos-end)
+  "Update spelling for POS-BEG & POS-END to the queue, checking all text."
+  (hl-scope--font-lock-tree pos-beg pos-end))
 
 (defun hl-scope-mode-enable ()
   "Turn on `hl-scope-mode' for the current buffer."
-  (hl-scope--font-lock-tree))
+  ;; (hl-scope--font-lock-tree)
+  (jit-lock-register #'hl-scope--font-lock-fontify-region))
 
 (defun hl-scope-mode-disable ()
   "Turn off `hl-scope-mode' for the current buffer."
-  (hl-scope--overlay-clear)
-  (kill-local-variable 'hl-scope--overlay)
-  (kill-local-variable 'hl-scope-bracket)
-  (hl-scope--time-buffer-local-disable))
+  (jit-lock-unregister #'hl-scope--font-lock-fontify-region)
+  (hl-scope--overlay-clear))
 
 (defun hl-scope-mode-turn-on ()
   "Enable command `hl-scope-mode'."
