@@ -33,8 +33,10 @@
   :type 'boolean)
 
 (defcustom hl-scope-fill-empty-lines t "Fill in the empty lines (experimental)." :type 'boolean)
-(defcustom hl-scope-fill-over-text t "Fill in the empty lines (experimental)." :type 'boolean)
-(defcustom hl-scope-highlight-on-motion t "Fill in the empty lines (experimental)." :type 'boolean)
+(defcustom hl-scope-fill-over-text nil "Fill in the empty lines (experimental)." :type 'boolean)
+(defcustom hl-scope-highlight-on-motion nil
+  "Fill in the empty lines (experimental)."
+  :type 'boolean)
 
 
 ;; ---------------------------------------------------------------------------
